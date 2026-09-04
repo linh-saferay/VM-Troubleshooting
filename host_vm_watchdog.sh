@@ -8,20 +8,26 @@
 #    - Neu van fail: gui webhook, exit
 # 2. Neu ping peer OK: tiep tuc ping VM qua WireGuard IP
 #    - Neu OK: exit 0
-#    - Neu fail: SSH vao VM (1 lan, co timeout), gui webhook ket qua SSH (thanh cong/fail/timeout), exit
+#    - Neu fail: ping VM qua Host-only IP (timeout 30s)
+#        - Neu Host-only cung fail: gui webhook CRITICAL, exit
+#        - Neu Host-only OK: kiem tra task ssh_keepalive_vm qua Get-ScheduledTaskInfo
+#            - Neu task khong o trang thai Running: chay lai qua schtasks, gui webhook
+#            - Neu dang Running: gui webhook thong bao van dang cho keepalive tu phuc hoi
 
 export LC_ALL=C
 export TZ='Asia/Tokyo'
-export HOME="/c/Users/SR_admin"
+WIN_USERNAME=$(whoami | sed 's/.*\\\\//')
+export HOME="/c/Users/$WIN_USERNAME"
 export MSYSTEM=MINGW64
 export PATH="/usr/bin:/mingw64/bin:/c/Windows/System32:$PATH"
 
 WG_PEER_IP="10.9.0.1"
 VM_WG_IP="10.9.0.107"
+VM_HOSTONLY_IP="192.168.56.99"
+VM_HOSTONLY_TIMEOUT=30
 WG_ADAPTER_NAME="srjp"
-SSH_HOST="this-deb"
-SSH_TIMEOUT=15
-LOGFILE="/c/Users/SR_admin/Documents/log/host-vm-watchdog.log"
+KEEPALIVE_TASK_NAME="ssh_keepalive_vm"
+LOGFILE="/c/Users/$WIN_USERNAME/Documents/log/host-vm-watchdog.log"
 WEBHOOK_URL="https://b1n0-vn.giize.com/general-webhook"
 WEBHOOK_SECRET="KhdvIf0Db/yk8qmNR3EgKksNRurj6O/2KWyXC90yLQc="
 
@@ -49,6 +55,15 @@ ping_check() {
     return $?
 }
 
+# Ping voi timeout tuy chinh (dung -w cho moi packet, tinh bang ms), Windows ping
+ping_check_timeout() {
+    local ip="$1"
+    local timeout_sec="$2"
+    local timeout_ms=$((timeout_sec * 1000))
+    ping -n 3 -w "$timeout_ms" "$ip" > /dev/null 2>&1
+    return $?
+}
+
 echo "$(timestamp) - Bat dau kiem tra WireGuard peer $WG_PEER_IP" >> "$LOGFILE"
 
 # Buoc 1: Ping peer
@@ -73,7 +88,7 @@ else
     echo "$(timestamp) - Ping OK to peer $WG_PEER_IP" >> "$LOGFILE"
 fi
 
-# Buoc 2: Peer da OK, tiep tuc ping VM
+# Buoc 2: Peer da OK, tiep tuc ping VM qua WireGuard IP
 echo "$(timestamp) - Kiem tra VM qua WireGuard IP $VM_WG_IP..." >> "$LOGFILE"
 
 if ping_check "$VM_WG_IP"; then
@@ -81,21 +96,29 @@ if ping_check "$VM_WG_IP"; then
     exit 0
 fi
 
-echo "$(timestamp) - Ping FAIL to VM $VM_WG_IP, thu SSH vao $SSH_HOST (timeout ${SSH_TIMEOUT}s)..." >> "$LOGFILE"
+echo "$(timestamp) - Ping FAIL to VM $VM_WG_IP, kiem tra qua Host-only IP $VM_HOSTONLY_IP (timeout ${VM_HOSTONLY_TIMEOUT}s)..." >> "$LOGFILE"
 
-timeout "$SSH_TIMEOUT" ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$SSH_HOST" \
-    "uptime; echo 'SSH triggered at' \$(date)" >> "$LOGFILE" 2>&1
-SSH_RESULT=$?
+# Buoc 3: WireGuard IP fail, thu ping Host-only IP voi timeout dai hon
+if ! ping_check_timeout "$VM_HOSTONLY_IP" "$VM_HOSTONLY_TIMEOUT"; then
+    echo "$(timestamp) - Host-only IP $VM_HOSTONLY_IP cung FAIL sau ${VM_HOSTONLY_TIMEOUT}s. VM co the down hoan toan." >> "$LOGFILE"
+    send_webhook "CRITICAL: VM khong phan hoi ca WireGuard ($VM_WG_IP) lan Host-only ($VM_HOSTONLY_IP) - can kiem tra thu cong ngay"
+    exit 1
+fi
 
-if [ $SSH_RESULT -eq 0 ]; then
-    echo "$(timestamp) - SSH thanh cong" >> "$LOGFILE"
-    send_webhook "WARNING: VM $VM_WG_IP FAIL ping, da thu SSH va thanh cong"
-elif [ $SSH_RESULT -eq 124 ]; then
-    echo "$(timestamp) - SSH TIMEOUT sau ${SSH_TIMEOUT}s, VM co the dang treo hoac khong phan hoi" >> "$LOGFILE"
-    send_webhook "CRITICAL: VM $VM_WG_IP FAIL ping, SSH TIMEOUT sau ${SSH_TIMEOUT}s - VM co the dang treo, can kiem tra thu cong ngay"
+echo "$(timestamp) - Host-only IP OK. Kiem tra task $KEEPALIVE_TASK_NAME qua Get-ScheduledTaskInfo..." >> "$LOGFILE"
+
+# Buoc 4: Host-only OK, kiem tra trang thai task ssh_keepalive_vm
+TASK_STATE=$(powershell.exe -NoProfile -Command "(Get-ScheduledTask -TaskName '$KEEPALIVE_TASK_NAME').State" 2>>"$LOGFILE" | tr -d '\r')
+
+echo "$(timestamp) - Task $KEEPALIVE_TASK_NAME State: $TASK_STATE" >> "$LOGFILE"
+
+if [ "$TASK_STATE" = "Running" ]; then
+    echo "$(timestamp) - Task dang Running, nhung VM van khong ping duoc qua WireGuard" >> "$LOGFILE"
+    send_webhook "WARNING: VM $VM_WG_IP FAIL ping qua WireGuard nhung Host-only OK, task $KEEPALIVE_TASK_NAME dang Running - co the can them thoi gian de tu phuc hoi"
 else
-    echo "$(timestamp) - SSH FAIL (exit code $SSH_RESULT)" >> "$LOGFILE"
-    send_webhook "CRITICAL: VM $VM_WG_IP FAIL ping, SSH THAT BAI (exit code $SSH_RESULT) - can kiem tra thu cong"
+    echo "$(timestamp) - Task KHONG o trang thai Running (state: $TASK_STATE), khoi dong lai..." >> "$LOGFILE"
+    schtasks /run /tn "$KEEPALIVE_TASK_NAME" >> "$LOGFILE" 2>&1
+    send_webhook "WARNING: VM $VM_WG_IP FAIL ping qua WireGuard, task $KEEPALIVE_TASK_NAME khong Running (state: $TASK_STATE) - vua duoc khoi dong lai tu dong"
 fi
 
 exit 0
