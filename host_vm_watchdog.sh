@@ -16,7 +16,7 @@
 
 export LC_ALL=C
 export TZ='Asia/Tokyo'
-WIN_USERNAME=$(whoami | sed 's/.*\\\\//')
+WIN_USERNAME="$USERNAME"
 export HOME="/c/Users/$WIN_USERNAME"
 export MSYSTEM=MINGW64
 export PATH="/usr/bin:/mingw64/bin:/c/Windows/System32:$PATH"
