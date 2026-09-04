@@ -4,7 +4,7 @@
 
 $WinUsername = $env:USERNAME
 $BashExe = "C:\Program Files\Git\usr\bin\bash.exe"
-$ScriptDir = "C:\Users\$WinUsername\scripts"
+$ScriptDir = "C:\Users\$WinUsername\scritps"
 
 $WatchdogScript = "$ScriptDir\host_vm_watchdog.sh"
 $KeepaliveScript = "$ScriptDir\ssh-keepalive.sh"
@@ -35,10 +35,13 @@ if (-not (Test-Path $KeepaliveScript)) {
 }
 
 # Chuyen path Windows sang dinh dang Git Bash (C:\Users\... -> /c/Users/...)
+# FIXED: khong dung scriptblock trong -replace (khong duoc PowerShell -replace ho tro dung cach)
+# Thay bang cach tach chuoi thu cong, on dinh hon.
 function Convert-ToBashPath($winPath) {
     $p = $winPath -replace '\\', '/'
-    $p = $p -replace '^([A-Za-z]):', { "/" + $_.Groups[1].Value.ToLower() }
-    return $p
+    $drive = $p.Substring(0,1).ToLower()
+    $rest = $p.Substring(2)
+    return "/$drive$rest"
 }
 
 $WatchdogScriptBash = Convert-ToBashPath $WatchdogScript
@@ -47,6 +50,16 @@ $KeepaliveScriptBash = Convert-ToBashPath $KeepaliveScript
 Write-Host "Bash path cho watchdog: $WatchdogScriptBash"
 Write-Host "Bash path cho keepalive: $KeepaliveScriptBash"
 Write-Host ""
+
+# Kiem tra ket qua convert co dung dinh dang khong (safety check truoc khi tao task)
+if ($WatchdogScriptBash -notmatch '^/[a-z]/') {
+    Write-Host "ERROR: Convert-ToBashPath cho ket qua khong hop le: $WatchdogScriptBash" -ForegroundColor Red
+    exit 1
+}
+if ($KeepaliveScriptBash -notmatch '^/[a-z]/') {
+    Write-Host "ERROR: Convert-ToBashPath cho ket qua khong hop le: $KeepaliveScriptBash" -ForegroundColor Red
+    exit 1
+}
 
 # Xoa task cu neu co (de tao lai sach)
 schtasks /delete /tn "$WatchdogTaskName" /f 2>$null
@@ -95,3 +108,6 @@ Write-Host ""
 Write-Host "Hoan tat. Kiem tra lai bang:" -ForegroundColor Cyan
 Write-Host "  Get-ScheduledTaskInfo -TaskName '$WatchdogTaskName'"
 Write-Host "  Get-ScheduledTaskInfo -TaskName '$KeepaliveTaskName'"
+Write-Host ""
+Write-Host "Xac nhan Action da dung (khong bi loi convert path):" -ForegroundColor Cyan
+Write-Host "  (Get-ScheduledTask -TaskName '$WatchdogTaskName').Actions"
