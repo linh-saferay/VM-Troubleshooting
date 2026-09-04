@@ -4,7 +4,7 @@
 
 $WinUsername = $env:USERNAME
 $BashExe = "C:\Program Files\Git\usr\bin\bash.exe"
-$ScriptDir = "C:\Users\$WinUsername\scritps"
+$ScriptDir = "C:\Users\$WinUsername\scripts"
 
 $WatchdogScript = "$ScriptDir\host_vm_watchdog.sh"
 $KeepaliveScript = "$ScriptDir\ssh-keepalive.sh"
