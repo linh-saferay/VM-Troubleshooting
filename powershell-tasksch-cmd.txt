@@ -1,0 +1,27 @@
+#=== 1. Find last wake-up time (from sleep) ===
+Get-WinEvent -LogName System -MaxEvents 20 | Where-Object {$_.Id -eq 1 -and $_.ProviderName -eq "Microsoft-Windows-Power-Troubleshooter"} | Select-Object TimeCreated, Id | Format-Table
+
+# Find last sleep + wake events together (Id 42 = sleep, Id 1 = wake)
+Get-WinEvent -LogName System -MaxEvents 50 | Where-Object {$_.Id -eq 42 -or $_.Id -eq 1} | Select-Object TimeCreated, Id | Format-Table
+
+# Find last boot time (cold boot, not wake-from-sleep)
+(Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
+
+#=== 2. Find most CPU/RAM consumed process (not scheduled task, but the actual running process) ===
+# Top 10 by CPU
+Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, Id, CPU, @{N='RAM(MB)';E={[math]::Round($_.WorkingSet/1MB,1)}}
+
+# Top 10 by RAM
+Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 10 Name, Id, @{N='RAM(MB)';E={[math]::Round($_.WorkingSet/1MB,1)}}, CPU
+
+#=== 2b. If you specifically want SCHEDULED TASK actions with highest resource use (task-level, not process-level) ===
+# Task Scheduler itself doesn't track per-task CPU/RAM directly, but you can cross-reference
+# the process spawned by each running task's action executable:
+Get-ScheduledTask | Where-Object {$_.State -eq "Running"} | ForEach-Object {
+    $taskName = $_.TaskName
+    $exePath = ($_.Actions | Select-Object -First 1).Execute
+    $exeName = if ($exePath) { [System.IO.Path]::GetFileNameWithoutExtension($exePath) } else { $null }
+    if ($exeName) {
+        Get-Process -Name $exeName -ErrorAction SilentlyContinue | Select-Object @{N='Task';E={$taskName}}, Name, Id, CPU, @{N='RAM(MB)';E={[math]::Round($_.WorkingSet/1MB,1)}}
+    }
+}
