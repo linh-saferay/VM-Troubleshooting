@@ -117,7 +117,7 @@ if [ "$TASK_STATE" = "Running" ]; then
     send_webhook "WARNING: VM $VM_WG_IP FAIL ping qua WireGuard nhung Host-only OK, task $KEEPALIVE_TASK_NAME dang Running - co the can them thoi gian de tu phuc hoi"
 else
     echo "$(timestamp) - Task KHONG o trang thai Running (state: $TASK_STATE), khoi dong lai..." >> "$LOGFILE"
-    schtasks /run /tn "$KEEPALIVE_TASK_NAME" >> "$LOGFILE" 2>&1
+    powershell.exe -Command " schtasks /run /tn '$KEEPALIVE_TASK_NAME'" >> "$LOGFILE" 2>&1
     send_webhook "WARNING: VM $VM_WG_IP FAIL ping qua WireGuard, task $KEEPALIVE_TASK_NAME khong Running (state: $TASK_STATE) - vua duoc khoi dong lai tu dong"
 fi
 
