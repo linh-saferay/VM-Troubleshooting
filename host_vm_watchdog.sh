@@ -70,10 +70,22 @@ echo "$(timestamp) - Bat dau kiem tra WireGuard peer $WG_PEER_IP" >> "$LOGFILE"
 if ! ping_check "$WG_PEER_IP"; then
     echo "$(timestamp) - Ping FAIL to peer $WG_PEER_IP, restart WireGuard interface tren host..." >> "$LOGFILE"
 
-    powershell.exe -Command "Disable-NetAdapter -Name '$WG_ADAPTER_NAME' -Confirm:\$false" >> "$LOGFILE" 2>&1
-    sleep 3
-    powershell.exe -Command "Enable-NetAdapter -Name '$WG_ADAPTER_NAME' -Confirm:\$false" >> "$LOGFILE" 2>&1
-    sleep 5
+#    powershell.exe -Command "Disable-NetAdapter -Name '$WG_ADAPTER_NAME' -Confirm:\$false" >> "$LOGFILE" 2>&1
+#    sleep 3
+#    powershell.exe -Command "Enable-NetAdapter -Name '$WG_ADAPTER_NAME' -Confirm:\$false" >> "$LOGFILE" 2>&1
+#    sleep 5
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '
+    $TunnelName = "srjp"
+    $ServiceName = "WireGuardTunnel`$$TunnelName"
+    Get-Service -Name $ServiceName
+    if (-not $Service) {
+    Write-Error "WireGuard service '$ServiceName' not found. Is it installed?"
+    exit 1
+}
+Write-Host "Restarting WireGuard Service to clean the connection..." -ForegroundColor Cyan
+Restart-Service -Name $ServiceName -Force
+'
 
     echo "$(timestamp) - Da restart interface, ping lai peer..." >> "$LOGFILE"
 
