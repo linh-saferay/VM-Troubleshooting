@@ -1,5 +1,7 @@
 #For OpenWRT based router
-
+# This script check wireguard alive by pinging 10.9.0.1
+# Therefore, it works well only for RUT/Gateway device
+# For PC/VM please use wg_restart.sh
 echo $(date)
 target="10.9.0.1"
 if ping -c 1 "$target" >/dev/null 2>&1; then
