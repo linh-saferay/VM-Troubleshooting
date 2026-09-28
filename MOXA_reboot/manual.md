@@ -45,7 +45,7 @@ Hai function này **không nối trực tiếp với nhau** — chúng giao ti�
 qua context storage `Ina_dev_list` (dùng chung 1 store tên `"file"`, persistent
 qua các lần Node-RED khởi động lại).
 
-## Cấu trúc dữ liệu: `Ina_dev_list`
+## Cấu trúc dữ liệu: `Ina_dev_list (as example of Inawashiro)`
 
 Lưu bằng `flow.get`/`flow.set` (context store `"file"`), là 1 object keyed theo
 **tên thiết bị** (`devName`), ví dụ:
