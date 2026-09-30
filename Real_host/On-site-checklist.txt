@@ -1,0 +1,4 @@
+1. Tắt máy hẳn, rút sạc.
+2. Tháo pin ra (nếu tháo được — 820 G3 thường tháo pin được từ đáy máy).
+3. Giữ nút nguồn 30 giây (xả tụ điện dư trong mainboard).
+4. Lắp lại pin, KHÔNG cắm sạc, thử bấm nguồn.
